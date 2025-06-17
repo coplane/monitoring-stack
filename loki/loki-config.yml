@@ -1,0 +1,45 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+ingester:
+  lifecycler:
+    address: 127.0.0.1
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  wal:
+    enabled: true
+    dir: /loki/wal
+  chunk_idle_period: 1m
+  max_chunk_age: 1m
+  chunk_target_size: 1048576 # 1MB
+  chunk_retain_period: 30s
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  filesystem:
+    directory: /loki/chunks
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+    cache_ttl: 24h
+
+compactor:
+  working_directory: /loki/compactor
+  # The line "shared_store: filesystem" has been removed from here.
+
+ruler:
+  alertmanager_url: http://localhost:9093

@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # OTel Collector: Receives data and exports to Prometheus & Loki
+  otel-collector:
+    image: docker.io/otel/opentelemetry-collector-contrib:0.128.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./otel-collector/otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4317:4317" # OTLP gRPC receiver
+      # - "4318:4318" # OTLP HTTP receiver
+      # - "8889:8889" # Prometheus exporter
+    depends_on:
+      - prometheus
+      - loki
+
+  # Prometheus: Scrapes and stores metrics
+  prometheus:
+    image: docker.io/prom/prometheus:v3.4.1
+    container_name: prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-lifecycle"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    # ports:
+    #   - "9090:9090"
+
+  # Loki: Stores and indexes logs
+  loki:
+    image: docker.io/grafana/loki:3.5.1
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml
+      - loki_data:/loki
+    # ports:
+    #   - "3100:3100"
+
+  # Grafana: Visualizes metrics and logs
+  grafana:
+    image: docker.io/grafana/grafana:11.6.3
+    container_name: grafana
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:

@@ -1,0 +1,46 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+
+exporters:
+  # Exporter for Prometheus
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+  # Exporter for Loki
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+
+  otlphttp:
+    endpoint: "http://loki:3100/otlp"
+
+  # (Optional) For debugging, you can see the data in the collector's stdout
+  debug:
+    verbosity: detailed
+
+service:
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: '0.0.0.0'
+                port: 8888
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters:
+        - prometheus
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters:
+        - otlphttp
+        # - debug
