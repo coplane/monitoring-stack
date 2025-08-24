@@ -3,28 +3,51 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
 
 processors:
   batch:
+    timeout: 1s
+    send_batch_size: 1024
+  
+  # Add resource attributes to all telemetry
+  resource:
+    attributes:
+      - key: service.name
+        value: planar-tests
+        action: upsert
+      - key: environment
+        value: test
+        action: upsert
+      - key: component
+        value: pytest
+        action: upsert
 
 exporters:
-  # Exporter for Prometheus
+  # Prometheus metrics exporter
   prometheus:
     endpoint: "0.0.0.0:8889"
-
-  # Exporter for Loki
+    namespace: "planar_tests"
+    const_labels:
+      service: "planar-tests"
+      environment: "test"
+      component: "pytest"
+    send_timestamps: true
+    metric_expiration: 180m
+  
+  # Loki exporter for logs in Grafana
   loki:
     endpoint: "http://loki:3100/loki/api/v1/push"
-
-  otlphttp:
-    endpoint: "http://loki:3100/otlp"
-
-  # (Optional) For debugging, you can see the data in the collector's stdout
+  
+  # Debug exporter for development
   debug:
     verbosity: detailed
 
 service:
   telemetry:
+    logs:
+      level: info
     metrics:
       readers:
         - pull:
@@ -32,15 +55,19 @@ service:
               prometheus:
                 host: '0.0.0.0'
                 port: 8888
+  
   pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [debug]
+    
     metrics:
       receivers: [otlp]
-      processors: [batch]
-      exporters:
-        - prometheus
+      processors: [batch, resource]
+      exporters: [prometheus, debug]
+    
     logs:
       receivers: [otlp]
-      processors: [batch]
-      exporters:
-        - otlphttp
-        # - debug
+      processors: [batch, resource]
+      exporters: [loki, debug]

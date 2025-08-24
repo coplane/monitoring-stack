@@ -1,0 +1,117 @@
+groups:
+  - name: pytest.rules
+    interval: 30s
+    rules:
+      # Recording rules for test execution rates
+      - record: pytest:test_executions_total:rate5m
+        expr: rate(planar_tests_test_executions_total[5m])
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      - record: pytest:test_executions_total:rate1h
+        expr: rate(planar_tests_test_executions_total[1h])
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      # Recording rules for test duration percentiles
+      - record: pytest:test_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(planar_tests_test_duration_seconds_bucket[5m])) by (le, test_name, test_category))
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      - record: pytest:test_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum(rate(planar_tests_test_duration_seconds_bucket[5m])) by (le, test_name, test_category))
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      # Recording rules for test success rates
+      - record: pytest:test_success_rate:5m
+        expr: sum(rate(planar_tests_test_executions_total{result="passed"}[5m])) by (test_category) / sum(rate(planar_tests_test_executions_total[5m])) by (test_category)
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      - record: pytest:test_success_rate:1h
+        expr: sum(rate(planar_tests_test_executions_total{result="passed"}[1h])) by (test_category) / sum(rate(planar_tests_test_executions_total[1h])) by (test_category)
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      # Recording rules for test failure rates
+      - record: pytest:test_failure_rate:5m
+        expr: sum(rate(planar_tests_test_executions_total{result="failed"}[5m])) by (test_category)
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      # Recording rules for test performance metrics
+      - record: pytest:test_memory_usage_bytes:avg5m
+        expr: avg_over_time(planar_tests_test_memory_bytes[5m])
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+      
+      - record: pytest:test_cpu_usage_percent:avg5m
+        expr: avg_over_time(planar_tests_test_cpu_percent[5m])
+        labels:
+          service: "planar-tests"
+          component: "pytest"
+
+  - name: pytest.alerts
+    interval: 30s
+    rules:
+      # Alert when test success rate drops below threshold
+      - alert: PytestTestSuccessRateLow
+        expr: pytest:test_success_rate:5m < 0.95
+        for: 2m
+        labels:
+          severity: warning
+          service: "planar-tests"
+          component: "pytest"
+        annotations:
+          summary: "Test success rate is low"
+          description: "Test success rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+          dashboard: "{{ $labels.service }}/pytest-overview"
+      
+      # Alert when test failure rate is high
+      - alert: PytestTestFailureRateHigh
+        expr: pytest:test_failure_rate:5m > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          service: "planar-tests"
+          component: "pytest"
+        annotations:
+          summary: "High test failure rate detected"
+          description: "Test failure rate is {{ $value }} failures per second for the last 5 minutes"
+          dashboard: "{{ $labels.service }}/pytest-overview"
+      
+      # Alert when test duration is unusually high
+      - alert: PytestTestDurationHigh
+        expr: pytest:test_duration_seconds:p95 > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: "planar-tests"
+          component: "pytest"
+        annotations:
+          summary: "Test duration is unusually high"
+          description: "95th percentile test duration is {{ $value }} seconds"
+          dashboard: "{{ $labels.service }}/pytest-overview"
+      
+      # Alert when no tests are running
+      - alert: PytestNoTestsRunning
+        expr: rate(planar_tests_test_executions_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: "planar-tests"
+          component: "pytest"
+        annotations:
+          summary: "No tests are currently running"
+          description: "No test executions detected in the last 10 minutes"
+          dashboard: "{{ $labels.service }}/pytest-overview"

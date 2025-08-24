@@ -1,4 +1,6 @@
-version: '3.8'
+networks:
+  monitoring:
+    driver: bridge
 
 services:
   # OTel Collector: Receives data and exports to Prometheus & Loki
@@ -9,23 +11,28 @@ services:
     volumes:
       - ./otel-collector/otel-collector-config.yml:/etc/otel-collector-config.yml
     ports:
-      - "4317:4317" # OTLP gRPC receiver
-      # - "4318:4318" # OTLP HTTP receiver
-      # - "8889:8889" # Prometheus exporter
-    # depends_on:
-    #   - prometheus
-    #   - loki
+      - "4317:4317"  # OTLP gRPC receiver
+      - "4318:4318"  # OTLP HTTP receiver
+      - "8889:8889"  # Prometheus exporter
+      - "8888:8888"  # Internal metrics
+    networks:
+      - monitoring
+    restart: unless-stopped
 
   # Prometheus: Scrapes and stores metrics
   prometheus:
     image: docker.io/prom/prometheus:v3.4.1
     container_name: prometheus
-    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-lifecycle"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-lifecycle", "--storage.tsdb.retention.time=7d"]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/rules:/etc/prometheus/rules
       - prometheus_data:/prometheus
-    # ports:
-    #   - "9090:9090"
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+    restart: unless-stopped
 
   # Loki: Stores and indexes logs
   loki:
@@ -35,8 +42,11 @@ services:
     volumes:
       - ./loki/loki-config.yml:/etc/loki/loki-config.yml
       - loki_data:/loki
-    # ports:
-    #   - "3100:3100"
+    ports:
+      - "3100:3100"
+    networks:
+      - monitoring
+    restart: unless-stopped
 
   # Grafana: Visualizes metrics and logs
   grafana:
@@ -50,11 +60,17 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
-    # depends_on:
-    #   - prometheus
-    #   - loki
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    networks:
+      - monitoring
+    restart: unless-stopped
 
 volumes:
   prometheus_data:
+    driver: local
   loki_data:
+    driver: local
   grafana_data:
+    driver: local

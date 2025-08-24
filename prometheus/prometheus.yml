@@ -1,16 +1,73 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Rule files for recording rules and alerts
+rule_files:
+  - "rules/*.yml"
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - localhost:9093
 
 scrape_configs:
-  - job_name: otel-collector-internal-metrics
-    static_configs:
-      - targets:
-        - otel-collector:8888
-  - job_name: otel-collector
-    static_configs:
-      - targets:
-        - otel-collector:8889
+  # Scrape Prometheus itself
   - job_name: prometheus
     static_configs:
       - targets:
         - localhost:9090
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Scrape OTEL Collector internal metrics
+  - job_name: otel-collector-internal
+    static_configs:
+      - targets:
+        - otel-collector:8888
+    scrape_interval: 15s
+    metrics_path: /metrics
+    honor_labels: true
+
+  # Scrape OTEL Collector exported metrics (pytest metrics)
+  - job_name: planar-tests
+    static_configs:
+      - targets:
+        - otel-collector:8889
+    scrape_interval: 10s
+    metrics_path: /metrics
+    honor_labels: true
+    metric_relabel_configs:
+      # Add service label for better organization
+      - source_labels: [__name__]
+        regex: 'planar_tests_(.+)'
+        target_label: service
+        replacement: 'planar-tests'
+      
+      # Add component label
+      - source_labels: [__name__]
+        regex: 'planar_tests_(.+)'
+        target_label: component
+        replacement: 'pytest'
+      
+      # Ensure test.name is properly labeled
+      - source_labels: [test_name]
+        target_label: test_name
+        regex: '(.+)'
+      
+      # Ensure test.category is properly labeled
+      - source_labels: [test_category]
+        target_label: test_category
+        regex: '(.+)'
+
+  # Scrape OTEL Collector traces (if exposed)
+  - job_name: otel-collector-traces
+    static_configs:
+      - targets:
+        - otel-collector:4317
+    scrape_interval: 30s
+    metrics_path: /metrics
+    honor_labels: true
