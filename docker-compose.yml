@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # OTel Collector: Receives data and exports to Prometheus & Loki
   otel-collector:
